@@ -1,0 +1,70 @@
+name: Update Convoy Cask
+
+on:
+  schedule:
+    # Check for a new release every 6 hours
+    - cron: "0 */6 * * *"
+  workflow_dispatch: # Allow manual triggering from the GitHub Actions tab
+  repository_dispatch:
+    types: [new-release]
+
+permissions:
+  contents: write
+
+jobs:
+  update-cask:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for latest release and update cask
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Fetch the latest release tag from TheDynamicPunk/Convoy
+          RELEASE_JSON=$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/TheDynamicPunk/Convoy/releases/latest")
+
+          TAG_NAME=$(echo "${RELEASE_JSON}" | jq -r '.tag_name')
+          LATEST_VERSION="${TAG_NAME#v}"
+
+          if [[ -z "${LATEST_VERSION}" || "${LATEST_VERSION}" == "null" ]]; then
+            echo "Failed to determine latest version."
+            exit 1
+          fi
+
+          CURRENT_VERSION=$(sed -n 's/.*version "\([^"]*\)".*/\1/p' Casks/convoy.rb)
+
+          echo "Current version: ${CURRENT_VERSION}"
+          echo "Latest version:  ${LATEST_VERSION}"
+
+          if [[ "${CURRENT_VERSION}" == "${LATEST_VERSION}" ]]; then
+            echo "Cask is already up to date."
+            exit 0
+          fi
+
+          # Download the DMG and compute its SHA-256 checksum
+          DMG_URL="https://github.com/TheDynamicPunk/Convoy/releases/download/v${LATEST_VERSION}/Convoy-${LATEST_VERSION}.dmg"
+          echo "Downloading ${DMG_URL}..."
+          curl -fL "${DMG_URL}" -o "/tmp/Convoy-${LATEST_VERSION}.dmg"
+          NEW_SHA256=$(sha256sum "/tmp/Convoy-${LATEST_VERSION}.dmg" | awk '{print $1}')
+          rm -f "/tmp/Convoy-${LATEST_VERSION}.dmg"
+
+          echo "Computed SHA-256: ${NEW_SHA256}"
+
+          # Update Casks/convoy.rb
+          sed -i "s/version \"${CURRENT_VERSION}\"/version \"${LATEST_VERSION}\"/" Casks/convoy.rb
+          sed -i "s/sha256 \"[a-f0-9]*\"/sha256 \"${NEW_SHA256}\"/" Casks/convoy.rb
+
+          # Commit and push
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/convoy.rb
+          git commit -m "convoy ${LATEST_VERSION}"
+          git push
+
