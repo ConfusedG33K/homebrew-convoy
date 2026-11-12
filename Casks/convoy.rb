@@ -1,6 +1,6 @@
 cask "convoy" do
-  version "1.3.0"
-  sha256 "c3c2a8ca48ef32317f9f43e3bf20a2b1b9d3bf2570a33419ccbe464d37c9e159"
+  version "1.3.1"
+  sha256 "a4e4d39eb888185b9f994976e3a137bacdb98373592730ec31addbf9e3103d52"
 
   url "https://github.com/TheDynamicPunk/Convoy/releases/download/v#{version}/Convoy-#{version}.dmg"
   name "Convoy"
